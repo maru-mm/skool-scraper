@@ -1,28 +1,24 @@
 import express from 'express';
-import db from '../db/database.js';
+import { getScrapes, deleteScrape, getSummaries } from '../db/storage.js';
 
 const router = express.Router();
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const stmt = db.prepare(`
-      SELECT 
-        s.id,
-        s.url,
-        s.tab,
-        s.status,
-        s.items_count,
-        s.created_at,
-        s.completed_at,
-        COUNT(DISTINCT sum.id) as summary_count
-      FROM scrapes s
-      LEFT JOIN summaries sum ON s.id = sum.scrape_id
-      GROUP BY s.id
-      ORDER BY s.created_at DESC
-      LIMIT 50
-    `);
+    const scrapes = await getScrapes();
+    const summaries = await getSummaries();
     
-    const history = stmt.all();
+    // Add summary count to each scrape
+    const history = scrapes
+      .map(scrape => ({
+        ...scrape,
+        summaryCount: summaries.filter(s => s.scrapeId === scrape.id).length,
+        // Don't send items in list
+        items: undefined,
+      }))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 50);
+    
     res.json(history);
   } catch (error) {
     console.error('Error getting history:', error);
@@ -30,17 +26,11 @@ router.get('/', (req, res) => {
   }
 });
 
-router.delete('/:scrapeId', (req, res) => {
+router.delete('/:scrapeId', async (req, res) => {
   const { scrapeId } = req.params;
 
   try {
-    const stmt = db.prepare('DELETE FROM scrapes WHERE id = ?');
-    const result = stmt.run(scrapeId);
-
-    if (result.changes === 0) {
-      return res.status(404).json({ error: 'Scrape not found' });
-    }
-
+    await deleteScrape(scrapeId);
     res.json({ success: true, message: 'Scrape deleted' });
   } catch (error) {
     console.error('Error deleting scrape:', error);
@@ -49,4 +39,3 @@ router.delete('/:scrapeId', (req, res) => {
 });
 
 export default router;
-

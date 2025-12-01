@@ -1,5 +1,4 @@
-# fly.toml app configuration file
-# Configurazione per fly.io senza Docker
+# fly.toml - Configurazione ottimizzata per fly.io
 
 app = "skool-scraper"
 primary_region = "fra"
@@ -30,7 +29,6 @@ primary_region = "fra"
   cpus = 1
   memory_mb = 512
 
-[[statics]]
-  guest_path = "/app/dist"
-  url_prefix = "/"
-
+[mounts]
+  source = "data"
+  destination = "/app/data"

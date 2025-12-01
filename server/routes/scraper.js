@@ -1,7 +1,7 @@
 import express from 'express';
 import { nanoid } from 'nanoid';
 import { scrapeSkoolGroup } from '../services/apifyService.js';
-import db from '../db/database.js';
+import { getScrapes, getScrapeById, saveScrape } from '../db/storage.js';
 
 const router = express.Router();
 
@@ -12,7 +12,6 @@ router.post('/start', async (req, res) => {
     return res.status(400).json({ error: 'URL is required' });
   }
 
-  // Validate Skool URL
   if (!url.includes('skool.com')) {
     return res.status(400).json({ error: 'Invalid Skool URL' });
   }
@@ -20,47 +19,35 @@ router.post('/start', async (req, res) => {
   const scrapeId = nanoid();
 
   try {
-    // Insert initial scrape record
-    const stmt = db.prepare(`
-      INSERT INTO scrapes (id, url, tab, status)
-      VALUES (?, ?, ?, ?)
-    `);
-    stmt.run(scrapeId, url, tab || 'classroom', 'running');
+    // Save initial scrape record
+    await saveScrape({
+      id: scrapeId,
+      url,
+      tab: tab || 'classroom',
+      status: 'running',
+      itemsCount: 0,
+      items: [],
+      createdAt: new Date().toISOString(),
+    });
 
     // Start scraping in background
     scrapeSkoolGroup(url, { tab, includeComments, maxItems })
       .then(async (result) => {
-        // Update scrape status
-        const updateStmt = db.prepare(`
-          UPDATE scrapes 
-          SET status = ?, items_count = ?, completed_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `);
-        updateStmt.run('completed', result.count, scrapeId);
-
-        // Save scraped items
-        const insertItemStmt = db.prepare(`
-          INSERT INTO scrape_items (scrape_id, content, type)
-          VALUES (?, ?, ?)
-        `);
-
-        const insertMany = db.transaction((items) => {
-          for (const item of items) {
-            const content = JSON.stringify(item);
-            insertItemStmt.run(scrapeId, content, item.type || 'unknown');
-          }
+        await saveScrape({
+          id: scrapeId,
+          status: 'completed',
+          itemsCount: result.count,
+          items: result.items,
+          completedAt: new Date().toISOString(),
         });
-
-        insertMany(result.items);
       })
-      .catch((error) => {
-        // Update scrape with error
-        const errorStmt = db.prepare(`
-          UPDATE scrapes 
-          SET status = ?, error = ?, completed_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `);
-        errorStmt.run('failed', error.message, scrapeId);
+      .catch(async (error) => {
+        await saveScrape({
+          id: scrapeId,
+          status: 'failed',
+          error: error.message,
+          completedAt: new Date().toISOString(),
+        });
       });
 
     res.json({
@@ -74,49 +61,42 @@ router.post('/start', async (req, res) => {
   }
 });
 
-router.get('/status/:scrapeId', (req, res) => {
+router.get('/status/:scrapeId', async (req, res) => {
   const { scrapeId } = req.params;
 
   try {
-    const stmt = db.prepare(`
-      SELECT id, url, tab, status, items_count, created_at, completed_at, error
-      FROM scrapes
-      WHERE id = ?
-    `);
-    const scrape = stmt.get(scrapeId);
+    const scrape = await getScrapeById(scrapeId);
 
     if (!scrape) {
       return res.status(404).json({ error: 'Scrape not found' });
     }
 
-    res.json(scrape);
+    // Don't send all items in status, just metadata
+    const { items, ...metadata } = scrape;
+    
+    res.json({
+      ...metadata,
+      itemsCount: items?.length || 0,
+    });
   } catch (error) {
     console.error('Error getting scrape status:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-router.get('/items/:scrapeId', (req, res) => {
+router.get('/items/:scrapeId', async (req, res) => {
   const { scrapeId } = req.params;
 
   try {
-    const stmt = db.prepare(`
-      SELECT content, type, created_at
-      FROM scrape_items
-      WHERE scrape_id = ?
-      ORDER BY id
-    `);
-    const items = stmt.all(scrapeId);
+    const scrape = await getScrapeById(scrapeId);
 
-    const parsedItems = items.map(item => ({
-      ...JSON.parse(item.content),
-      type: item.type,
-      scraped_at: item.created_at,
-    }));
+    if (!scrape) {
+      return res.status(404).json({ error: 'Scrape not found' });
+    }
 
     res.json({
-      count: parsedItems.length,
-      items: parsedItems,
+      count: scrape.items?.length || 0,
+      items: scrape.items || [],
     });
   } catch (error) {
     console.error('Error getting scrape items:', error);
@@ -125,4 +105,3 @@ router.get('/items/:scrapeId', (req, res) => {
 });
 
 export default router;
-

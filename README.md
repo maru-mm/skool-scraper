@@ -108,12 +108,10 @@ brew install flyctl
 fly auth login
 ```
 
-### 3. Configura l'app
+### 3. Crea il volume per i dati
 
-Modifica il file `fly.toml` e cambia il nome dell'app:
-
-```toml
-app = "tuo-nome-app"
+```bash
+fly volumes create data --region fra --size 1
 ```
 
 ### 4. Imposta i secrets
@@ -201,7 +199,7 @@ skool-scraper/
 - **Node.js** + **Express** - Server e API
 - **Apify Client** - Scraping di Skool
 - **OpenAI API** - Generazione riassunti
-- **Better-SQLite3** - Database locale
+- **JSON File Storage** - Storage semplice e affidabile
 
 ### Frontend
 - **React 18** - UI Framework
@@ -210,7 +208,7 @@ skool-scraper/
 
 ### Deploy
 - **Fly.io** - Hosting e deploy automatico
-- **Heroku Buildpacks** - Build senza Docker
+- **Docker** - Build ottimizzato multi-stage
 
 ## 💡 Tips & Best Practices
 
