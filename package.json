@@ -8,9 +8,13 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "node --watch server/index.js",
     "client": "vite",
-    "build": "vite build",
+    "build": "npm install && vite build",
     "start": "node server/index.js",
     "preview": "vite preview"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   },
   "keywords": ["skool", "scraping", "ai", "saas"],
   "author": "",

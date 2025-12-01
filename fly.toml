@@ -5,7 +5,6 @@ app = "skool-scraper"
 primary_region = "fra"
 
 [build]
-  builder = "heroku/buildpacks:20"
 
 [env]
   NODE_ENV = "production"
@@ -29,7 +28,7 @@ primary_region = "fra"
 [[vm]]
   cpu_kind = "shared"
   cpus = 1
-  memory_mb = 256
+  memory_mb = 512
 
 [[statics]]
   guest_path = "/app/dist"
